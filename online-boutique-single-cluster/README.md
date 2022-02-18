@@ -4,20 +4,20 @@ This is a simple, 1-cluster demo of the GKE Poc Toolkit using the [Online Boutiq
 
 ## How to run 
 
-1. Go through the [GKE PoC Toolkit quickstart](https://github.com/GoogleCloudPlatform/gke-poc-toolkit#quickstart) up until the `gkekitctl create` step. 
+1. **Go through the [GKE PoC Toolkit quickstart](https://github.com/GoogleCloudPlatform/gke-poc-toolkit#quickstart) up until the `gkekitctl create` step.** 
 
-1. Export your project ID var. 
+2. **Export your project ID var.** 
 
 ```
 export PROJECT_ID=<your-project-id>
 ```
-3. Edit `config.yaml` in this directory to replace `my-project` with your toolkit `PROJECT_ID`. 
+3. **Edit `config.yaml` in this directory to replace `my-project` with your toolkit `PROJECT_ID`.** 
 
-4. Copy `config.yaml` to wherever you're running the toolkit from.
+4. **Copy `config.yaml` to wherever you're running the toolkit from.**
 
-5. Run `gkekitctl create --config config.yaml` from this directory. This will take about 10 minutes to run.
+5. **Run `gkekitctl create --config config.yaml` from this directory.** This will take about 10 minutes to run.
 
-6. Connect to your newly-created GKE cluster. 
+6. **Connect to your newly-created GKE cluster.** 
 
 ```bash
 gcloud container clusters get-credentials gke-central --region us-central1 --project $PROJECT_ID
@@ -35,16 +35,16 @@ NAME                                                  STATUS   ROLES    AGE   VE
 gke-gke-central-linux-gke-toolkit-poo-12b0fa78-grhw   Ready    <none>   11m   v1.21.6-gke.1500
 gke-gke-central-linux-gke-toolkit-poo-24d712a2-jm5g   Ready    <none>   11m   v1.21.6-gke.1500
 gke-gke-central-linux-gke-toolkit-poo-6fb11d07-h6xb   Ready    <none>   11m   v1.21.6-gke.1500
-````
+```
 
-7. Clone your Anthos Config Management (ACM) sync repo. 
+7. **Clone your Anthos Config Management (ACM) sync repo.** 
 
 ```
 gcloud source repos clone gke-poc-config-sync --project=$PROJECT_ID
 cd gke-poc-config-sync
 ```
 
-8. Download the latest Online Boutique release manifests into your ACM repo, then push to `main` branch. This will effectively deploy the sample app to your GKE cluster.
+8. **Download the latest Online Boutique release manifests into your ACM repo, then push to `main` branch.** This will effectively deploy the sample app to your GKE cluster.
 
 ```
 wget https://raw.githubusercontent.com/GoogleCloudPlatform/microservices-demo/main/release/kubernetes-manifests.yaml
@@ -64,7 +64,7 @@ To https://source.developers.google.com/p/megan-gpt-gke-02181211/r/gke-poc-confi
    c214414..4cfa20b  main -> main
 ```
 
-9. Watch for the Online Boutique Deployments and Services to be created via Config Sync. 
+9. **Watch for the Online Boutique Deployments and Services to be created via Config Sync.** 
 
 ```bash 
 watch kubectl get pods
@@ -88,7 +88,7 @@ redis-cart-5b569cd47-fpg4g               1/1     Running   0          2m22s
 shippingservice-5488d5b6cb-8zkfb         1/1     Running   0          2m23s
 ```
 
-10. View the Online Boutique frontend in a browser to verify successful deployment. 
+10. **View the Online Boutique frontend in a browser to verify successful deployment.** 
 
 ```bash 
 kubectl get svc frontend-external
