@@ -189,7 +189,7 @@ Online Boutique's backend services use [gRPC](https://grpc.io/) as their transpo
 
 [Observability](https://cloud.google.com/architecture/devops/devops-measurement-monitoring-and-observability) is an important part of running any application in the cloud. GKE makes observability easy by exporting your container's application logs and basic metrics to Google Cloud Operations.
 
-[Link](https://pantheon.corp.google.com/logs/query)
+[Link](https://console.cloud.google.com/logs/query)
 
 View the application logs across all Online Boutique services by running this query: 
 
@@ -201,7 +201,7 @@ resource.type="k8s_container" resource.labels.cluster_name="gke-central" resourc
 
 ## Monitoring 
 
-[Link](https://pantheon.corp.google.com/monitoring/metrics-explorer)
+[Link](https://console.cloud.google.com/monitoring/metrics-explorer)
 
 [GKE sends System metrics](https://cloud.google.com/stackdriver/docs/solutions/gke/managing-metrics) to Google Cloud Monitoring, including pod CPU and memory usage. ([Full list](https://cloud.google.com/monitoring/api/metrics_kubernetes)). 
 
