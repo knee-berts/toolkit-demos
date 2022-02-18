@@ -1,7 +1,7 @@
 # GKE PoC Toolkit config
 terraformState: cloud  
-clustersProjectId: "megan-gpt-gke-02181211"
-governanceProjectId: "megan-gpt-gke-02181211"
+clustersProjectId: "my-project"
+governanceProjectId: "my-project"
 region: "us-central1"
 enablePreemptibleNodepool: false # Enforced on Linux Node pools only
 enableWindowsNodepool: false
@@ -21,7 +21,7 @@ sendAnalytics: true
 vpcConfig:
   vpcName: "default"
   vpcType: "standalone" 
-  vpcProjectId: "megan-gpt-gke-02181211" 
+  vpcProjectId: "my-project" 
   podCIDRName: "default"
   svcCIDRName: "default"
   authCIDR: "0.0.0.0/0"
