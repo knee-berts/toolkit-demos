@@ -31,11 +31,11 @@ gcloud container clusters get-credentials gke-east --region us-east1 --project $
 
 ```bash
 kubectx ##Lists all clusters in your config
-kubectx gke_{GKE_PROJECT_ID}_us-west1_gke-west
+kubectx gke_${GKE_PROJECT_ID}_us-west1_gke-west
 kubectl get nodes
-kubectx gke_{GKE_PROJECT_ID}_us-east1_gke-east
+kubectx gke_${GKE_PROJECT_ID}_us-east1_gke-east
 kubectl get nodes
-kubectx gke_{GKE_PROJECT_ID}_us-central1_gke-central
+kubectx gke_${GKE_PROJECT_ID}_us-central1_gke-central
 kubectl get nodes
 ```
 
