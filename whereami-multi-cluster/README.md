@@ -54,5 +54,28 @@ gcloud source repos clone gke-poc-config-sync --project=$GKE_PROJECT_ID
 cd gke-poc-config-sync
 ```
 
+8. **Download a front end and back end set of release manifests into your ACM repo, then push to `main` branch.** This will effectively deploy the a frontend and backend WHEREAMI service to all of your GKE clusters.
 
+```
+cat <<EOF > default-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: default
+  labels:
+    istio.io/rev: asm-managed
+EOF
+git add .
+git commit -m "Update default namespace with istio label" 
+git push origin main
+
+git clone https://github.com/knee-berts/gke-whereami.git whereami
+kustomize build whereami/k8s-backend-overlay-example/ -o .
+kustomize build whereami/k8s-frontend-clusterip-overlay-example/ -o .
+
+rm -rf whereami
+git add .
+git commit -m "Deploy Whereami Front and backend services" 
+git push origin main
+```
 
