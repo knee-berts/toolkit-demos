@@ -273,6 +273,23 @@ git commit -m "Deploy multi cluster components."
 git push origin main
 ```
 
+12. **This while loop will run until the managed cert is provisioned, it can take up to 30 mins. In the meantime, let's go over how we have achieved end to end encryption. [source](https://gitlab.com/asm7/secure-multicluster-ingress#end-to-end-multicluster-ingress-encryption)**
+
+```bash
+## Check the managed cert provisions status, we want it to return "ACTIVE"
+while [ `gcloud beta compute ssl-certificates describe ${WHEREAMI_MANAGED_CERT} --format='value(managed.status)'` != "ACTIVE" ]; do echo "Cert is not Active" sleep 10; done
+```
+
+        There are three legs of this ingress:
+        
+        1. The first leg is from the client to the Google load balancer (GCLB). This leg uses the Google managed certificate or any certificate that is trusted by external clients.
+        2. The second leg is from the Google load balancer to the ASM ingress gateway. You can use any certificate between GCLB and ASM ingress gateway. In this tutorial you create a self-signed certificate. In production environments, you can use any PKI for this certificate.
+        3. The third leg is from the ASM ingress gateway to the desired Service. Traffic between ASM ingress gateways and all mesh services can be encrypted using mTLS. Mesh CA is the certificate authority that performs worload certificate management.
+
+13. **Validate Gateway regional failover
+
+14. **Validate Service to Service regional failover
+
 
 
 
