@@ -4,6 +4,7 @@ metadata:
   labels:
     app: whereami-backend
   name: whereami-backend
+  namespace: whereami
 spec:
   replicas: 3
   selector:

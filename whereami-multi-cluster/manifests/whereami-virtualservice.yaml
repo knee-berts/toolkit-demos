@@ -5,7 +5,7 @@ metadata:
     namespace: whereami
 spec:
     hosts:
-    - *
+    - "whereami.endpoints.${GKE_PROJECT_ID}.cloud.goog"
     gateways:
     - asm-gateways/asm-ingress-gateway-xlb
     http:

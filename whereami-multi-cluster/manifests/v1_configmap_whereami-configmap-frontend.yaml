@@ -10,3 +10,4 @@ metadata:
   labels:
     app: whereami-frontend
   name: whereami-configmap-frontend
+  namespace: whereami

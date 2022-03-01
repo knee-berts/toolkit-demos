@@ -4,6 +4,8 @@ metadata:
   name: asm-ingressgateway-xlb-multicluster-ingress
   namespace: asm-gateways
   annotations:
+    networking.gke.io/static-ip: <fill in>
+    networking.gke.io/pre-shared-certs: <fill in>
     configsync.gke.io/cluster-name-selector: gke-east-membership
 spec:
   template:

@@ -4,6 +4,7 @@ metadata:
   labels:
     app: whereami-frontend
   name: whereami-frontend
+  namespace: whereami
 spec:
   ports:
   - name: http
@@ -11,4 +12,4 @@ spec:
     targetPort: 8080
   selector:
     app: whereami-frontend
-  type: LoadBalancer
+  type: ClusterIP

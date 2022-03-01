@@ -4,6 +4,7 @@ metadata:
   labels:
     app: whereami-frontend
   name: whereami-frontend
+  namespace: whereami
 spec:
   replicas: 3
   selector:
