@@ -5,7 +5,11 @@ This demo shows you how to bootstrap three GKE clusters into a multi-cluster net
 
 1. **Go through the [GKE PoC Toolkit quickstart](https://github.com/GoogleCloudPlatform/gke-poc-toolkit#quickstart) up until the `gkekitctl create` and stop at step 6 (gkekitctl init).** 
 
-2. **Copy `config.yaml` to wherever you're running the toolkit from.**
+2. **Copy `multi-clusters-networking-acm-standalone-vpc.yaml` from the samples folder to wherever you're running the toolkit from.**
+
+```bash
+cp samples/multi-clusters-networking-acm-standalone-vpc.yaml config.yaml
+```
 
 3. **Export vars and add them to your GKE POC toolkit config.yaml.**
 
@@ -51,7 +55,6 @@ gke-gke-central-linux-gke-toolkit-poo-6fb11d07-h6xb   Ready    <none>   11m   v1
 
 ```
 gcloud source repos clone gke-poc-config-sync --project=$GKE_PROJECT_ID
-export ACM_REPO_DIR=`pwd`
 cd gke-poc-config-sync
 export ACM_REPO_DIR=`pwd`
 ```
@@ -89,14 +92,14 @@ metadata:
   name: whereami-managed-cert
   namespace: istio-system
   annotations:
-    configsync.gke.io/cluster-name-selector: gke-east-membership
+    configsync.gke.io/cluster-name-selector: gke-central-membership
 spec:
   domains:
   - "whereami.endpoints.${GKE_PROJECT_ID}.cloud.goog"
 EOF
 ```
 
-10. **Create Cloud Armor policies. [Google Cloud Armor](https://cloud.google.com/armor) provides DDoS defense and [customizable security policies](https://cloud.google.com/armor/docs/configure-security-policies) that you can attach to a load balancer through Ingress resources. In the following steps, you create a security policy that uses [preconfigured rules](https://cloud.google.com/armor/docs/rule-tuning#preconfigured_rules) to block cross-site scripting (XSS) attacks.
+10. **Create Cloud Armor policies. [Google Cloud Armor](https://cloud.google.com/armor) provides DDoS defense and [customizable security policies](https://cloud.google.com/armor/docs/configure-security-policies) that you can attach to a load balancer through Ingress resources. In the following steps, you create a security policy that uses [preconfigured rules](https://cloud.google.com/armor/docs/rule-tuning#preconfigured_rules) to block cross-site scripting (XSS) attacks.**
 
 ```bash
 gcloud compute security-policies create gclb-fw-policy \
@@ -134,8 +137,18 @@ metadata:
   labels:
     istio.io/rev: asm-managed
 EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/default-namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: asm-gateways
+  labels:
+    istio.io/rev: asm-managed
+EOF
+
 git add .
-git commit -m "Update default namespace with istio label" 
+git commit -m "Update namespaces with istio label" 
 git push origin main
 
 git clone https://github.com/knee-berts/gke-whereami.git whereami
@@ -214,7 +227,7 @@ subjects:
     name: default
 EOF
 
-export WHEREAMI_MANAGED_CERT=$(kubectl --context gke_${GKE_PROJECT_ID}_us-east1_gke-east -n istio-system get managedcertificate whereami-managed-cert -ojsonpath='{.status.certificateName}')
+export WHEREAMI_MANAGED_CERT=$(kubectl --context gke_${GKE_PROJECT_ID}_us-central1_gke-central -n istio-system get managedcertificate whereami-managed-cert -ojsonpath='{.status.certificateName}')
 
 cat <<EOF > ${ACM_REPO_DIR}/mci.yaml
 apiVersion: networking.gke.io/v1beta1
@@ -224,7 +237,8 @@ metadata:
   namespace: asm-gateways
   annotations:
     networking.gke.io/static-ip: "${GCLB_IP}"
-    networking.gke.io/pre-shared-certs: "${WHEREAMI_MANAGED_CERT}"
+    # networking.gke.io/pre-shared-certs: "${WHEREAMI_MANAGED_CERT}"
+    configsync.gke.io/cluster-name-selector: "gke-central-membership"
 spec:
   template:
     spec:
@@ -242,6 +256,7 @@ metadata:
   annotations:
     beta.cloud.google.com/backend-config: '{"ports": {"443":"asm-ingress-xlb-config"}}'
     networking.gke.io/app-protocols: '{"http2":"HTTP2"}'
+    configsync.gke.io/cluster-name-selector: "gke-central-membership"
 spec:
   template:
     spec:
@@ -259,6 +274,8 @@ kind: BackendConfig
 metadata:
   name: asm-ingress-xlb-config
   namespace: asm-gateways
+  annotations:
+    configsync.gke.io/cluster-name-selector: "gke-central-membership"
 spec:
   healthCheck:
     type: HTTP
@@ -266,6 +283,44 @@ spec:
     requestPath: /healthz/ready
   securityPolicy:
     name: "gclb-fw-policy"
+EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/asm-ingress-gateway.yaml
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: asm-ingress-gateway-xlb
+  namespace: asm-gateways
+spec:
+  selector:
+    asm: ingressgateway-xlb # use ASM external ingress gateway
+  servers:
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    hosts:
+    - '*' # IMPORTANT: Must use wildcard here when using SSL, see note below
+    # tls:
+    #   mode: SIMPLE
+    #   credentialName: edge2mesh-credential
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+    name: whereami-frontend-virtualservice-external
+    namespace: default
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - asm-gateways/asm-ingress-gateway-xlb
+  http:
+  - route:
+      - destination:
+          host: whereami-frontend
+          port:
+            number: 80
 EOF
 
 git add .
@@ -286,10 +341,265 @@ while [ `gcloud beta compute ssl-certificates describe ${WHEREAMI_MANAGED_CERT} 
         2. The second leg is from the Google load balancer to the ASM ingress gateway. You can use any certificate between GCLB and ASM ingress gateway. In this tutorial you create a self-signed certificate. In production environments, you can use any PKI for this certificate.
         3. The third leg is from the ASM ingress gateway to the desired Service. Traffic between ASM ingress gateways and all mesh services can be encrypted using mTLS. Mesh CA is the certificate authority that performs worload certificate management.
 
-13. **Validate Gateway regional failover
+14. **Setup Destination rules for ASM east west failover
 
-14. **Validate Service to Service regional failover
+```bash
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-frontend-cluster-1.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-frontend-destrule-cluster-east
+  namespace: default
+  annotations:
+    configsync.gke.io/cluster-name-selector: "gke-east-membership"
+spec:
+  host: whereami-frontend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: us-east1
+            to:
+              us-central1
+              europe-north1
+              us-west1 
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
 
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-frontend-cluster-2.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-frontend-destrule-cluster-central
+  namespace: default
+spec:
+  host: whereami-frontend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: us-central1
+            to:
+              us-west1 
+              us-east1
+              europe-north1
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-frontend-cluster-3.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-frontend-destrule-cluster-west
+  namespace: default
+spec:
+  host: whereami-frontend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: us-west1 
+            to:
+              us-central1
+              us-east1 
+              europe-north1
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-frontend-cluster-4.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-frontend-destrule-cluster-eu
+  namespace: default
+spec:
+  host: whereami-frontend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: europe-north1 
+            to:
+              us-west1
+              us-central1
+              us-east1
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-backend-cluster-1.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-backend-destrule-cluster-east
+  namespace: default
+spec:
+  host: whereami-backend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: us-east1
+            to:
+              us-central1
+              europe-north1
+              us-west1 
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-backend-cluster-2.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-backend-destrule-cluster-central
+  namespace: default
+spec:
+  host: whereami-backend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: us-central1
+            to:
+              us-west1 
+              us-east1
+              europe-north1
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-backend-cluster-3.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-backend-destrule-cluster-west
+  namespace: default
+spec:
+  host: whereami-backend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: us-west1
+            to:
+              us-central1
+              us-east1 
+              europe-north1
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
+
+cat <<EOF > ${ACM_REPO_DIR}/destinationrules-whereami-backend-cluster-4.yaml
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: whereami-backend-destrule-cluster-eu
+  namespace: default
+spec:
+  host: whereami-backend.default.svc.cluster.local
+  trafficPolicy:
+    connectionPool:
+      http:
+        maxRequestsPerConnection: 1
+    loadBalancer:
+      simple: ROUND_ROBIN
+      localityLbSetting:
+        enabled: true
+        failover:
+          - from: europe-north1
+            to:
+              us-east1
+              us-central1
+              us-west1 
+              
+    outlierDetection:
+      consecutive5xxErrors: 1
+      interval: 1s
+      baseEjectionTime: 1m
+EOF
+```
+
+13. **Validate Gateway regional failover AKA North/South failover**
+First setup a while loop that curls the frontend api and returns the GCP zone of the frontend pod you get routed to.
+```bash
+while true; do curl https://whereami.endpoints.${GKE_PROJECT_ID}.cloud.goog/zone; echo ;  sleep 1; done
+```
+
+Set an envar for the region in which that zone resides. For example, if the zone returned from a curl is us-east1-c set the region to us-east1.
+```bash
+export CLOSEST_REGION=us-east1
+```
+
+Start up a second terminal and scale the Frontend service in that region to zero.
+```bash
+kubectl scale deploy whereami-frontend -n default --context gke_${GKE_PROJECT}_${CLOSEST_REGION}_gke-east --replicas 0 
+```
+
+Observe that the curl will start sending traffic to other GCP regions as soon as the last pod in your closest region terminates. After a few seconds the self healing nature of config sync re-deploys the pods in your region and traffic is routed back to that same region.
+
+14. **Validate Service to Service regional failover AKA East/West failover**
+First setup a while loop that curls the frontend api and returns the GCP zone of the backend pod you get routed to.
+```bash
+while true; do curl -s "https://whereami.endpoints.${GKE_PROJECT_ID}.cloud.goog" | jq .zone,.backend_result.zone; echo ;  sleep 1; done
+```
+
+Start up a second terminal and scale the Bakend service in that region to zero.
+```bash
+kubectl scale deploy whereami-backend -n default --context gke_${GKE_PROJECT_ID}_${CLOSEST_REGION}_gke-east --replicas 0 
+```
 
 
 
